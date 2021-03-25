@@ -1,7 +1,7 @@
 # Human-aware Navigation
 Human-aware Navigation System for Robot.
 
-![image](demo/human-aware navigation.png)
+**** NOTE **** This is a developing repository for our research. 
 
 ## Dependencies
 This repository has been developed and tested in Ubuntu 18.04 and ROS Melodic only.
@@ -26,7 +26,9 @@ This repository has been developed and tested in Ubuntu 18.04 and ROS Melodic on
   - `sudo apt-get install ros-melodic-gmapping`
   - `sudo apt-get install ros-melodic-amcl`
   - `sudo apt-get install ros-melodic-move-base`
-  
+  - 
+## Authors:
+**Nagarjun Vinukonda and Zhuoyun Zhong**
 
 ## Running
 
