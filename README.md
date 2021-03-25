@@ -1,7 +1,7 @@
 # Human-aware Navigation
 Human-aware Navigation System for Robot.
 
-**** NOTE **** This is a developing repository for our research. 
+***NOTE:*** This is a developing repository for our research. 
 
 ## Dependencies
 This repository has been developed and tested in Ubuntu 18.04 and ROS Melodic only.
