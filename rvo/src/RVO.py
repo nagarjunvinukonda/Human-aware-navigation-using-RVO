@@ -4,65 +4,85 @@ import copy
 import numpy
 
 from math import cos, sin, tan, atan2, asin
-
 from math import pi as PI
-
-
-
-def distance(pose1, pose2):
-    """ compute Euclidean distance for 2D """
-    return sqrt((pose1[0]-pose2[0])**2+(pose1[1]-pose2[1])**2)+0.001
 
 
 def RVO_update(X, V_des, V_current, ws_model):
     """ compute best velocity given the desired velocity, current velocity and workspace model"""
-    ROB_RAD = ws_model['robot_radius']+0.1
-    V_opt = list(V_current)    
+    ROB_RAD = ws_model['robot_radius'] + 0.1 # robot radius
+    V_opt = list(V_current) # velocities of robots
+
+    # Multi agents
+    # For each robot
     for i in range(len(X)):
-        vA = [V_current[i][0], V_current[i][1]]
-        pA = [X[i][0], X[i][1]]
-        RVO_BA_all = []
+        # Current robot
+        vA = [V_current[i][0], V_current[i][1]] # current velocity
+        pA = [X[i][0], X[i][1]] # current position
+        RVO_BA_all = [] # velocity cones
+
+        # For each agent other than current robot, build velocity cone
         for j in range(len(X)):
             if i!=j:
-                vB = [V_current[j][0], V_current[j][1]]
-                pB = [X[j][0], X[j][1]]
+
+                vB = [V_current[j][0], V_current[j][1]] # vel of the other agent
+                pB = [X[j][0], X[j][1]] # pos of the other agent
+
                 # use RVO
-                transl_vB_vA = [pA[0]+0.5*(vB[0]+vA[0]), pA[1]+0.5*(vB[1]+vA[1])]
-                # use VO
-                #transl_vB_vA = [pA[0]+vB[0], pA[1]+vB[1]]
+                # next position if take 1/2(Va + Vb)
+                transl_vB_vA = [pA[0] + 0.5*(vB[0]+vA[0]), pA[1] + 0.5*(vB[1]+vA[1])]
+                
                 dist_BA = distance(pA, pB)
                 theta_BA = atan2(pB[1]-pA[1], pB[0]-pA[0])
-                if 2*ROB_RAD > dist_BA:
-                    dist_BA = 2*ROB_RAD
+
+                # set dist between (2 * robot_rad, inf)
+                if 2 * ROB_RAD > dist_BA:
+                    dist_BA = 2 * ROB_RAD
+
+                # Compute velocity cone angles (left, right)
                 theta_BAort = asin(2*ROB_RAD/dist_BA)
-                theta_ort_left = theta_BA+theta_BAort
+                theta_ort_left = theta_BA + theta_BAort
+                theta_ort_right = theta_BA - theta_BAort
+
                 bound_left = [cos(theta_ort_left), sin(theta_ort_left)]
-                theta_ort_right = theta_BA-theta_BAort
                 bound_right = [cos(theta_ort_right), sin(theta_ort_right)]
+
                 # use HRVO
                 # dist_dif = distance([0.5*(vB[0]-vA[0]),0.5*(vB[1]-vA[1])],[0,0])
                 # transl_vB_vA = [pA[0]+vB[0]+cos(theta_ort_left)*dist_dif, pA[1]+vB[1]+sin(theta_ort_left)*dist_dif]
                 RVO_BA = [transl_vB_vA, bound_left, bound_right, dist_BA, 2*ROB_RAD]
-                RVO_BA_all.append(RVO_BA)                
+                RVO_BA_all.append(RVO_BA)
+
+        # For each obstacle, build velocity cone
         for hole in ws_model['circular_obstacles']:
-            # hole = [x, y, rad]
-            vB = [0, 0]
-            pB = hole[0:2]
-            transl_vB_vA = [pA[0]+vB[0], pA[1]+vB[1]]
+
+            vB = [0, 0] # vel = 0
+            pB = hole[0:2] # hole = [x, y, rad]
+            
+            # next position if take 1/2(Va + Vb)
+            transl_vB_vA = [pA[0] + vB[0], pA[1] + vB[1]]
+
             dist_BA = distance(pA, pB)
             theta_BA = atan2(pB[1]-pA[1], pB[0]-pA[0])
+
             # over-approximation of square to circular
             OVER_APPROX_C2S = 1.5
             rad = hole[2]*OVER_APPROX_C2S
-            if (rad+ROB_RAD) > dist_BA:
-                dist_BA = rad+ROB_RAD
-            theta_BAort = asin((rad+ROB_RAD)/dist_BA)
-            theta_ort_left = theta_BA+theta_BAort
+            # set dist between (obstacle_rad + robot_rad, inf)
+            if (rad + ROB_RAD) > dist_BA:
+                dist_BA = rad + ROB_RAD
+            
+            # Compute velocity cone angles (left, right)
+            theta_BAort = asin((rad + ROB_RAD)/dist_BA)
+            theta_ort_left = theta_BA + theta_BAort
+            theta_ort_right = theta_BA - theta_BAort
+
             bound_left = [cos(theta_ort_left), sin(theta_ort_left)]
-            theta_ort_right = theta_BA-theta_BAort
             bound_right = [cos(theta_ort_right), sin(theta_ort_right)]
-            RVO_BA = [transl_vB_vA, bound_left, bound_right, dist_BA, rad+ROB_RAD]
+
+            RVO_BA = [transl_vB_vA, bound_left, bound_right, dist_BA, rad + ROB_RAD]
             RVO_BA_all.append(RVO_BA)
+
+        # Find optimal velocity given all the velocity cones
         vA_post = intersect(pA, V_des[i], RVO_BA_all)
         V_opt[i] = vA_post[:]
     return V_opt
@@ -74,6 +94,7 @@ def intersect(pA, vA, RVO_BA_all):
     norm_v = distance(vA, [0, 0])
     suitable_V = []
     unsuitable_V = []
+
     for theta in numpy.arange(0, 2*PI, 0.1):
         for rad in numpy.arange(0.02, norm_v+0.02, norm_v/5.0):
             new_v = [rad*cos(theta), rad*sin(theta)]
@@ -95,6 +116,7 @@ def intersect(pA, vA, RVO_BA_all):
                 unsuitable_V.append(new_v)                
     new_v = vA[:]
     suit = True
+
     for RVO_BA in RVO_BA_all:                
         p_0 = RVO_BA[0]
         left = RVO_BA[1]
@@ -150,9 +172,15 @@ def intersect(pA, vA, RVO_BA_all):
                     tc_v = dist_tg/distance(dif, [0,0])
                     tc.append(tc_v)
             tc_V[tuple(unsuit_v)] = min(tc)+0.001
+
+        # Minimize
+        # 1, 
+        # 2, difference from desired velocity
         WT = 0.2
-        vA_post = min(unsuitable_V, key = lambda v: ((WT/tc_V[tuple(v)])+distance(v, vA)))
+        vA_post = min(unsuitable_V, key = lambda v: ((WT/tc_V[tuple(v)]) + distance(v, vA)))
+        
     return vA_post 
+
 
 def in_between(theta_right, theta_dif, theta_left):
     if abs(theta_right - theta_left) <= PI:
@@ -178,22 +206,34 @@ def in_between(theta_right, theta_dif, theta_left):
             else:
                 return False
 
+
 def compute_V_des(X, goal, V_max):
     V_des = []
+    # For every agent
     for i in range(len(X)):
-        dif_x = [goal[i][k]-X[i][k] for k in range(2)]
+        # vector - distance to goal
+        dif_x = [goal[i][k] - X[i][k] for k in range(2)]
+        # scaler - distance to goal
         norm = distance(dif_x, [0, 0])
+
+        # vector - desired velocity pointing towards the goal
         norm_dif_x = [dif_x[k]*V_max[k]/norm for k in range(2)]
         V_des.append(norm_dif_x[:])
+
+        # if reach the goal, v = 0 
         if reach(X[i], goal[i], 0.1):
             V_des[i][0] = 0
             V_des[i][1] = 0
     return V_des
-            
+
+
 def reach(p1, p2, bound=0.5):
     if distance(p1,p2)< bound:
         return True
     else:
         return False
-    
-    
+
+
+def distance(pose1, pose2):
+    """ compute Euclidean distance for 2D """
+    return sqrt( (pose1[0] - pose2[0])**2 + (pose1[1] - pose2[1])**2 ) + 0.001
