@@ -51,6 +51,12 @@ def map_xy_to_xz(v_robot, t_diff, k):
     return vel, omega
 
 
+# Another way to encounter while loop:
+# def float_range(start, stop, step):
+#     while start < stop:
+#         yield float(start)
+#         start += decimal.Decimal(step)
+
 def rvo_test():
     # ROS node
     rospy.init_node('RVO_Bot')
@@ -72,7 +78,7 @@ def rvo_test():
     X = [[0, 0]]
     V = [[0, 0]]
     # robot pos & goal
-    goal = [[5.0, 0.0]]
+    goal = [[5.0, -1.0]]
     # robot initial vel & max velocity
     V_max = [1, 1]
     
@@ -80,7 +86,9 @@ def rvo_test():
     last_time = rospy.Time.now().to_sec()
     while not rospy.is_shutdown():
         rospy.loginfo("Start simulation")
-
+        
+        # Another way to encounter while loop:
+        # while round(distance(X[0],goal[0]),2) not in list(float_range(0, 0.2, '0.01')):
         while not (distance(X[0], goal[0]) < 0.5):
             # Get the latest position of the robot
             x, y, yaw = get_robot_pose("gopher_1")
@@ -89,6 +97,7 @@ def rvo_test():
             # Run RVO
             # compute desired vel to goal
             V_des = compute_V_des(X, goal, V_max)
+
             # compute the optimal vel to avoid collision
             V = RVO_update(X, V_des, V, ws_model)
 
@@ -98,6 +107,8 @@ def rvo_test():
             time_diff = current_time - last_time
             last_time = current_time
             # w.r.t. robot
+
+            # We are chaning cartisian coordinates of simulation velocities into polar coordinates
             v_robot = [ np.cos(yaw)*V[0][0] + np.sin(yaw)*V[0][1], 
                        -np.sin(yaw)*V[0][0] + np.cos(yaw)*V[0][1]] 
             # to v.x and o.z
@@ -122,7 +133,7 @@ def rvo_test():
             print("Vx: %.02f, Vy: %.2f"%(v_robot[0], v_robot[1]))
             print("time_diff %.4f"%(time_diff))
             print("Vel: %.2f, Omega: %.2f"%(vel, omega))
-            print
+            # print
 
             rate.sleep()
             

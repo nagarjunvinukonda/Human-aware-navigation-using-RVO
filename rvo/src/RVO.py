@@ -9,6 +9,8 @@ from math import pi as PI
 
 def RVO_update(X, V_des, V_current, ws_model):
     """ compute best velocity given the desired velocity, current velocity and workspace model"""
+
+
     ROB_RAD = ws_model['robot_radius'] + 0.1 # robot radius
     V_opt = list(V_current) # velocities of robots
 
@@ -91,22 +93,36 @@ def RVO_update(X, V_des, V_current, ws_model):
 def intersect(pA, vA, RVO_BA_all):
     # print '----------------------------------------'
     # print 'Start intersection test'
+
+    """ It checks for all the intersecting RVO cones there lies a suitable velocity outside or not. If not avaiable it selects V inside RVO, which has min penality """
+
     norm_v = distance(vA, [0, 0])
     suitable_V = []
     unsuitable_V = []
-
+    
+    # A random theta
     for theta in numpy.arange(0, 2*PI, 0.1):
+        # A random vector constant for desired velocity
         for rad in numpy.arange(0.02, norm_v+0.02, norm_v/5.0):
+
+            # This is for checking any random velocity vector with start point as desired velocity is in RVO cone or not
+            # A desired velocity vector with random direction both x and y            
             new_v = [rad*cos(theta), rad*sin(theta)]
             suit = True
             for RVO_BA in RVO_BA_all:
+                #shifted VO cone apex position
                 p_0 = RVO_BA[0]
                 left = RVO_BA[1]
                 right = RVO_BA[2]
+                # dif is considering position coordinates of velocity vectors(desired + current) inside new shifted VO cone
                 dif = [new_v[0]+pA[0]-p_0[0], new_v[1]+pA[1]-p_0[1]]
+                # theta_dif is angle formed by new vectors
                 theta_dif = atan2(dif[1], dif[0])
+                # theta_ort_right
                 theta_right = atan2(right[1], right[0])
+                # theta_ort_left
                 theta_left = atan2(left[1], left[0])
+                # if the velocity vector lies inside the VO cone its not suitable velocity
                 if in_between(theta_right, theta_dif, theta_left):
                     suit = False
                     break
@@ -114,9 +130,12 @@ def intersect(pA, vA, RVO_BA_all):
                 suitable_V.append(new_v)
             else:
                 unsuitable_V.append(new_v)                
+    
+    # new_V here is desired or preffered V (this is different from previous new_V)
     new_v = vA[:]
     suit = True
 
+    # This is for checking only the absolute value of desired velocity vector lies in RVO cone or not
     for RVO_BA in RVO_BA_all:                
         p_0 = RVO_BA[0]
         left = RVO_BA[1]
@@ -146,15 +165,21 @@ def intersect(pA, vA, RVO_BA_all):
             theta_right = atan2(right[1], right[0])
             theta_left = atan2(left[1], left[0])
     else:
+        # Here we are penalizing the unsuitable V tthat are inside RVO. For more information on formula check "Reciprocal Velocity Obstacles for Real-Time Multi-Agent Navigation" page 5.
+
+        # if No suitable velocity is avilable in combined RVO we penalise and select the velocity with min penality.
         # print 'Suitable not found'
+        # tc_V is expected time to collision with prefered velocity Vi
         tc_V = dict()
         for unsuit_v in unsuitable_V:
+            # create an empty list of tc_V
             tc_V[tuple(unsuit_v)] = 0
             tc = []
             for RVO_BA in RVO_BA_all:
                 p_0 = RVO_BA[0]
                 left = RVO_BA[1]
                 right = RVO_BA[2]
+                # dist_BA
                 dist = RVO_BA[3]
                 rad = RVO_BA[4]
                 dif = [unsuit_v[0]+pA[0]-p_0[0], unsuit_v[1]+pA[1]-p_0[1]]
@@ -171,18 +196,26 @@ def intersect(pA, vA, RVO_BA_all):
                         dist_tg = 0                    
                     tc_v = dist_tg/distance(dif, [0,0])
                     tc.append(tc_v)
+            # For the combined reciprocal velocity obstacle, the expected time to collision is the minimum of all expected times to collision(tc) with respect to the individual other agents and obstacles, and infinity when there is no collision.       
+            
             tc_V[tuple(unsuit_v)] = min(tc)+0.001
 
         # Minimize
-        # 1, 
+        # 1, penality
         # 2, difference from desired velocity
+
+        # WT is Omega(Angular velcity). This can vary among the agents to reflect differences in aggressiveness and sluggishness.
         WT = 0.2
+
+        # Penality formula: (Available in paper)
         vA_post = min(unsuitable_V, key = lambda v: ((WT/tc_V[tuple(v)]) + distance(v, vA)))
         
     return vA_post 
 
 
 def in_between(theta_right, theta_dif, theta_left):
+    """ Checks if the theta_diff lies between theta_right and theta_left"""
+
     if abs(theta_right - theta_left) <= PI:
         if theta_right <= theta_dif <= theta_left:
             return True
@@ -208,6 +241,8 @@ def in_between(theta_right, theta_dif, theta_left):
 
 
 def compute_V_des(X, goal, V_max):
+    """ Computing desired velocity from start to goal"""
+
     V_des = []
     # For every agent
     for i in range(len(X)):
