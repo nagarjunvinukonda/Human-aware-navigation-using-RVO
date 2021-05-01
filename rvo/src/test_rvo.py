@@ -11,6 +11,9 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from RVO import RVO_update, reach, compute_V_des, reach, distance
 
 
+from potential_field import PotentialField
+
+
 def twist_to_xyyaw(data):
         position = data.pose.position
         x = position.x
@@ -71,35 +74,69 @@ def rvo_test():
     # robot radius
     ws_model['robot_radius'] = 0.2
     # circular obstacles, format [x, y, rad]
-    ws_model['circular_obstacles'] = []
+    obstacles = [[-3, 5, 1]]
+    ws_model['circular_obstacles'] = obstacles
 
     # Robot settings
     # initialization
     X = [[0, 0]]
     V = [[0, 0]]
     # robot pos & goal
-    goal = [[5.0, -1.0]]
+    goal = [[-1.5, 7.5]]
     # robot initial vel & max velocity
     V_max = [1, 1]
     
     # Simulation starts
     last_time = rospy.Time.now().to_sec()
+    
+
+    pf = PotentialField()
+    pf.set_goal(goal[0])
+    pf.add_obstacles(obstacles)
+
+
+    
+
     while not rospy.is_shutdown():
         rospy.loginfo("Start simulation")
         
+
         # Another way to encounter while loop:
         # while round(distance(X[0],goal[0]),2) not in list(float_range(0, 0.2, '0.01')):
+
+
         while not (distance(X[0], goal[0]) < 0.5):
             # Get the latest position of the robot
             x, y, yaw = get_robot_pose("gopher_1")
             X = [[x, y]]
 
+
             # Run RVO
             # compute desired vel to goal
             V_des = compute_V_des(X, goal, V_max)
 
+
+
+            # compute force
+            force = pf.compute_force(X[0])
+            # print("force: %.2f"%(force))
+
+            # next step
+            descent_rate = 1.0
+
+            V_potential = descent_rate * force
+            # delta_x = next_move[0]
+            # delta_y = next_move[1]
+
+  
+
+
             # compute the optimal vel to avoid collision
-            V = RVO_update(X, V_des, V, ws_model)
+            # V = RVO_update(X, V_des, V, ws_model)
+
+            V = RVO_update(X, V_potential, V, ws_model)
+
+            
 
             # Map vx, vy to v_pos.x, v_ori.z
             # delta_t
@@ -108,7 +145,7 @@ def rvo_test():
             last_time = current_time
             # w.r.t. robot
 
-            # We are chaning cartisian coordinates of simulation velocities into polar coordinates
+            # We are rotating the local coordinates of robot w.r.t global coordinates (Rotation matrix * [x,y])
             v_robot = [ np.cos(yaw)*V[0][0] + np.sin(yaw)*V[0][1], 
                        -np.sin(yaw)*V[0][0] + np.cos(yaw)*V[0][1]] 
             # to v.x and o.z

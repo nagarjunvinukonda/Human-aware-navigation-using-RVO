@@ -154,6 +154,7 @@ def intersect(pA, vA, RVO_BA_all):
     #----------------------        
     if suitable_V:
         # print 'Suitable found'
+        # selecting a velocity vector among suitable velocities closest to desired velocity(VA)
         vA_post = min(suitable_V, key = lambda v: distance(v, vA))
         new_v = vA_post[:]
         for RVO_BA in RVO_BA_all:
